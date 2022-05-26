@@ -1,0 +1,86 @@
+---
+layout: default
+title: Shock tube sod lodi boundary
+parent: Examples Input Files
+grand_parent: Running Simulations
+nav_exclude: true
+---
+
+[shocktube/shockTubeSODLodiBoundary.yaml](https://github.com/UBCHREST/ablate/tree/main/tests/integrationTests/inputs/shocktube/shockTubeSODLodiBoundary.yaml)
+```yaml
+---
+environment:
+  title: _SOD Problem with LODI Boundaries
+  tagDirectory: false
+arguments: {}
+timestepper:
+  name: theMainTimeStepper
+  arguments:
+    ts_type: rk
+    ts_max_time: 0.5
+    ts_dt: 1e-6
+    ts_max_steps: 1000000
+    ts_adapt_type: none
+  domain: !ablate::domain::BoxMeshBoundaryCells
+    name: simpleBoxField
+    faces: [ 5 ]
+    lower: [ 0 ]
+    upper: [ 1 ]
+    preModifiers:
+      - !ablate::domain::modifiers::SetFromOptions
+        dm_refine: 0
+      - !ablate::domain::modifiers::DistributeWithGhostCells
+    postModifiers:
+      - !ablate::domain::modifiers::GhostBoundaryCells
+    fields:
+      - !ablate::finiteVolume::CompressibleFlowFields
+        eos: !ablate::eos::PerfectGas &eos
+          parameters:
+            gamma: 1.4
+            Rgas: 287
+        region:
+          name: domain
+  initialization:
+    - !ablate::finiteVolume::fieldFunctions::Euler
+      state: &flowFieldState
+        eos: *eos
+        temperature: "x < .5 ? 0.00348 : 0.00279"
+        pressure: "x < 0.5 ? 1 : 0.1"
+        velocity: "0"
+solvers:
+  - !ablate::finiteVolume::CompressibleFlowSolver
+    id: flow solver
+    region:
+      name: interiorCells
+    parameters:
+      cfl: .25
+    eos: *eos
+    computePhysicsTimeStep: true
+    fluxCalculator: !ablate::finiteVolume::fluxCalculator::Rieman
+      eos: *eos
+    monitors:
+      - !ablate::monitors::TimeStepMonitor
+      - !ablate::monitors::CurveMonitor
+  - !ablate::boundarySolver::BoundarySolver
+    id: isothermalWall
+    region:
+      name: boundaryCellsRight
+    fieldBoundary:
+      name: boundaryFaces
+    processes:
+      - !ablate::boundarySolver::lodi::IsothermalWall
+        eos: *eos
+  - !ablate::boundarySolver::BoundarySolver
+    id: openBoundary
+    region:
+      name: boundaryCellsLeft
+    fieldBoundary:
+      name: boundaryFaces
+    processes:
+      - !ablate::boundarySolver::lodi::OpenBoundary
+        eos: *eos
+        reflectFactor: 0.0
+        referencePressure: 1
+        maxAcousticsLength: 1
+
+```

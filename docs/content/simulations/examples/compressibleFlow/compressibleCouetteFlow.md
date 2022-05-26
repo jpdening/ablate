@@ -1,0 +1,146 @@
+---
+layout: default
+title: Compressible couette flow
+parent: Examples Input Files
+grand_parent: Running Simulations
+nav_exclude: true
+---
+This input is used to test the finite volume solver using standard essential boundary conditions.
+
+[compressibleFlow/compressibleCouetteFlow.yaml](https://github.com/UBCHREST/ablate/tree/main/tests/integrationTests/inputs/compressibleFlow/compressibleCouetteFlow.yaml)
+```yaml
+---
+# metadata for the simulation
+environment:
+  title: _compressibleCouetteFlow
+  tagDirectory: false
+# global arguments that can be used by petsc
+arguments:
+  dm_plex_separate_marker: ""
+# set up the time stepper responsible for marching in time
+timestepper:
+  name: theMainTimeStepper
+  # time stepper specific input arguments
+  arguments:
+    ts_type: rk
+    ts_adapt_type: none
+    ts_max_steps: 20
+  # the domain/mesh must be specified at the start of a simulation
+  domain: !ablate::domain::BoxMesh
+    name: simpleBoxField
+    faces: [ 12, 12 ]
+    lower: [ 0, 0 ]
+    upper: [ 1, 1 ]
+    boundary: [ "PERIODIC", "NONE" ]
+    simplex: false
+    # specify any modifications to be performed to the mesh/domain
+    modifiers:
+      - !ablate::domain::modifiers::SetFromOptions
+        dm_refine: 0
+      # if using mpi, this modifier distributes cells
+      - !ablate::domain::modifiers::DistributeWithGhostCells
+      # if using a FVM ghost boundary cells must be added
+      - !ablate::domain::modifiers::GhostBoundaryCells
+    fields:
+      # all fields must be defined before solvers.  The ablate::finiteVolume::CompressibleFlowFields is a helper
+      # class that creates the required fields for the compressible flow solver (rho, rhoE, rhoU, ...)
+      - !ablate::finiteVolume::CompressibleFlowFields
+        # the !ablate::finiteVolume::CompressibleFlowFields needs the eos to determine if there are any species
+        eos: !ablate::eos::PerfectGas
+          &eos # the & anchors the eos so that it can be reused
+          parameters:
+            gamma: 1.4
+            Rgas: 287.0
+
+  # set the initial conditions of the flow field
+  initialization:
+    # this problem only using a single field "euler" with rho, rhoE, rhoU, rhoV.  Use the default simpleFormula to set these field values
+    - fieldName: "euler" #for euler all components are in a single field
+      field: >-
+        1.0,
+        215250.0,
+        0.0,
+        0.0
+      timeDerivative: "0.0, 0.0, 0.0, 0.0"
+  exactSolution:
+    # set the exact solution for "euler" using another formula
+    - fieldName: "euler" # rho, rho_e = rho*(CvT + u^2/2), rho_u, rho_v
+      field: >-
+        1.0, 
+        1.0 * (215250.0 + (0.5 * (50 * y)^2)),
+        1.0 * 50 * y, 
+        1.0 * 0.0
+      timeDerivative: "0.0, 0.0, 0.0, 0.0"
+
+# this problem uses a single solver (!ablate::finiteVolume::CompressibleFlowSolver)
+solver: !ablate::finiteVolume::CompressibleFlowSolver
+  id: vortexFlowField
+  parameters:
+    cfl: 0.5
+  # a flux calculator must be specified to so solver for advection
+  fluxCalculator: !ablate::finiteVolume::fluxCalculator::Ausm
+
+  # the default transport object assumes constant values for k, mu, diff
+  transport:
+    k: 0.0
+    mu: 1.0
+
+  # share the existing eos with the compressible flow solver
+  eos: *eos
+
+  # overwrite and set the time step based upon the CFL constraint
+  computePhysicsTimeStep: true
+
+  # using constant boundary condition values on sides 1,3 with the specified values for euler
+  boundaryConditions:
+    - !ablate::finiteVolume::boundaryConditions::EssentialGhost
+      boundaryName: "walls"
+      labelIds: [ 1 ]
+      boundaryValue:
+        fieldName: euler
+        field: "1.0, 215250.0, 0.0, 0.0"
+    - !ablate::finiteVolume::boundaryConditions::EssentialGhost
+      boundaryName: "walls"
+      labelIds: [ 3 ]
+      boundaryValue:
+        fieldName: euler
+        field: "1.0, 216500.0, 50.0, 0.0"
+  monitors:
+    # computes the standard l1 norm error and outputs to standard out
+    - !ablate::monitors::SolutionErrorMonitor
+      scope: component
+      type: l1_norm
+
+    # computes the standard l1 norm error and outputs to the L1_solutionMonitor.log file
+    - !ablate::monitors::SolutionErrorMonitor
+      scope: component
+      type: l1_norm
+      log: !ablate::monitors::logs::FileLog
+        name: L1_solutionMonitor.log
+
+    # computes the standard l1 norm error and outputs to a L1_solutionMonitor.csv file
+    - !ablate::monitors::SolutionErrorMonitor
+      scope: component
+      type: l1_norm
+      log: !ablate::monitors::logs::CsvLog
+        name: L1_solutionMonitor.csv
+
+    # computes the standard l2 norm error and outputs to standard out
+    - !ablate::monitors::SolutionErrorMonitor
+      scope: component
+      type: l2_norm
+
+    # computes the standard l2 norm error and outputs to the L2_solutionMonitor.log file
+    - !ablate::monitors::SolutionErrorMonitor
+      scope: component
+      type: l2_norm
+      log: !ablate::monitors::logs::FileLog
+        name: L2_solutionMonitor.log
+
+    # computes the standard l2 norm error and outputs to a L2_solutionMonitor.csv file
+    - !ablate::monitors::SolutionErrorMonitor
+      scope: component
+      type: l2_norm
+      log: !ablate::monitors::logs::CsvLog
+        name: L2_solutionMonitor.csv
+```

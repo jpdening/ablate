@@ -1,0 +1,117 @@
+---
+layout: default
+title: Sub domain fvm
+parent: Examples Input Files
+grand_parent: Running Simulations
+nav_exclude: true
+---
+this test ensures that solvers can operate over a subset of the entire domain
+
+[machinery/subDomainFVM.yaml](https://github.com/UBCHREST/ablate/tree/main/tests/integrationTests/inputs/machinery/subDomainFVM.yaml)
+```yaml
+---
+# metadata for the simulation
+environment:
+  title: subDomainFVM
+  tagDirectory: false
+arguments: 
+  dm_plex_separate_marker: ""
+  petsclimiter_type: none
+# set up the time stepper responsible for marching in time
+timestepper:
+  name: theMainTimeStepper
+  # output the field at every time step and allow for restarting
+  io:
+    interval: 0
+  arguments:
+    ts_type: rk
+    ts_adapt_type: none
+    ts_max_steps: 10
+
+  # the domain/mesh must be specified at the start of a simulation
+  domain: !ablate::domain::BoxMesh
+    name: simpleBoxField
+    faces: [ 6, 6 ]
+    lower: [ 0, 0 ]
+    upper: [ 1, 1 ]
+    boundary: [ "NONE", "NONE" ]
+    simplex: false
+    modifiers:
+      # specify arguments to be used for the creation of the dm/domain
+      - !ablate::domain::modifiers::SetFromOptions
+        dm_refine: 1
+      # if using mpi, this modifier distributes cells
+      - !ablate::domain::modifiers::DistributeWithGhostCells
+
+      # create a new label and initialize it using the sphere math function
+      - !ablate::domain::modifiers::CreateLabel
+        # the name of the region to create
+        region:
+          name: fluidFlow
+        # any math function can be used, the sphere defaults to 1 inside and 0 outside
+        function: !ablate::mathFunctions::geom::Sphere
+          center: [.5, .5]
+          radius: .25
+
+      # tag the faces and cells that are on the outside of the new fluidFlow region
+      - !ablate::domain::modifiers::TagLabelBoundary
+        region:
+          name: fluidFlow
+        boundaryFaceRegion:
+          name: fluidFlowBoundary
+        boundaryCellRegion:
+          name: fluidBoundaryCell
+
+      # merge the fluid flow and fluid boundary cell regions. This region is used to define the required fields
+      - !ablate::domain::modifiers::MergeLabels
+        mergedRegion:
+          name: fluidField
+        regions:
+          - name: fluidFlow
+          - name: fluidBoundaryCell
+      - !ablate::domain::modifiers::GhostBoundaryCells
+    fields:
+      # all fields must be defined before solvers.  The ablate::finiteVolume::CompressibleFlowFields is a helper
+      # class that creates the required fields for the compressible flow solver (rho, rhoE, rhoU, ...)
+      - !ablate::finiteVolume::CompressibleFlowFields
+        # only define these fields over a subset of the domain
+        region:
+          name: fluidField
+        eos: !ablate::eos::PerfectGas &eos
+          parameters:
+            gamma: 1.4
+            Rgas: 287.0
+        conservedFieldOptions:
+          petsclimiter_type: none
+          petscfv_type: leastsquares
+  initialization:
+    # the ablate::finiteVolume::fieldFunctions::Euler can be used to initialize euler based upon t, p, and velocity
+    - !ablate::finiteVolume::fieldFunctions::Euler
+      state:
+        eos: *eos
+        temperature: "300"
+        pressure: !ablate::mathFunctions::geom::Sphere
+          center: [ .5, .5 ]
+          radius: .1
+          insideValues: [ 201325.0 ]
+          outsideValues: [ 101325.0 ]
+        velocity: "0, 0"
+
+# this problem uses a single solver (!ablate::finiteVolume::CompressibleFlowSolver)
+solver: !ablate::finiteVolume::CompressibleFlowSolver
+  id: subDomainFVMSolver
+  # only operate this solver over a subset of the domain
+  region: 
+    name: fluidFlow
+  parameters:
+    cfl: 0.25
+  computePhysicsTimeStep: true
+  fluxCalculator: !ablate::finiteVolume::fluxCalculator::Ausm
+  transport: !ablate::eos::transport::Sutherland
+    eos: *eos
+  eos: *eos
+  boundaryConditions: []
+  monitors:
+    - !ablate::monitors::TimeStepMonitor
+
+```

@@ -1,0 +1,89 @@
+---
+layout: default
+title: Ignition delay2 s ch4 cm2
+parent: Examples Input Files
+grand_parent: Running Simulations
+nav_exclude: true
+---
+This input runs a zero-dimension ignition delay calculation using a simplified 2S_CH4_CM2 kinetics mechanism.  To run this input the 2S_CH4_CM2.mech.dat and 2S_CH4_CM2.thermo.dat files will need to be downloaded and the paths updated in this file.
+
+
+[reactingFlow/ignitionDelay2S_CH4_CM2.yaml](https://github.com/UBCHREST/ablate/tree/main/tests/integrationTests/inputs/reactingFlow/ignitionDelay2S_CH4_CM2.yaml)
+```yaml
+---
+# metadata for the simulation
+environment:
+  title: _ignitionDelay2S_CH4_CM2
+  tagDirectory: false
+arguments: 
+  petsclimiter_type: none
+# set up the time stepper responsible for marching in time
+timestepper:
+  name: theMainTimeStepper
+  arguments:
+    ts_type: rk
+    ts_max_time: 0.1
+    ts_dt: 1E-6
+    ts_max_steps: 25
+  # setup a simple mesh with only a single point
+  domain: !ablate::domain::BoxMesh
+    name: simpleBoxField
+    faces: [ 1 ]
+    lower: [ 0 ]
+    upper: [ 1 ]
+    modifiers:
+      # if using a FVM ghost boundary cells must be added
+      - !ablate::domain::modifiers::GhostBoundaryCells
+    fields:
+      # all fields must be defined before solvers.  The ablate::finiteVolume::CompressibleFlowFields is a helper
+      # class that creates the required fields for the compressible flow solver (rho, rhoE, rhoU, ...) and species mass fractions
+      - !ablate::finiteVolume::CompressibleFlowFields
+        eos: &eos !ablate::eos::TChem # the tchem eos uses tChemV1 to parse the mechanisms and determine what species are needed to be tracked
+          mechFile: ../mechanisms/2S_CH4_CM2.mech.dat
+          thermoFile: ../mechanisms/2S_CH4_CM2.thermo.dat
+
+  # set the initial conditions of the flow field
+  initialization:
+    # The ablate::finiteVolume::CompressibleFlowFields is a helper class that creates the required fields for the compressible flow solver (rho, rhoE, rhoU, ...)
+    - !ablate::finiteVolume::fieldFunctions::Euler
+      state:
+        &initState
+        eos: *eos
+        temperature: 1200.0
+        pressure: 101325.0
+        velocity: [ 0.0 ]
+        # the mass fractions must be specified to compute rho, e, etc.
+        massFractions: !ablate::finiteVolume::fieldFunctions::MassFractions
+          # the mass fraction class allows for a subset of mass fractions to be specified.  The rest are assumed zero
+          eos: *eos
+          values:
+            - fieldName: N2
+              field: 0.724672103
+            - fieldName: CH4
+              field: 0.055186656
+            - fieldName: O2
+              field: 0.220141239
+    # the DensityMassFractions reuses the initState to set the densityMassFractions for all species
+    - !ablate::finiteVolume::fieldFunctions::DensityMassFractions
+      state: *initState
+
+# the basic FiniteVolumeSolver is used with only a single reaction process
+solver: !ablate::finiteVolume::FiniteVolumeSolver
+  id: reactingFlowODE
+  options: {}
+  processes:
+    # without advection/diffusion the tChemReactions process is the only one needed
+    - !ablate::finiteVolume::processes::TChemReactions
+      eos: *eos # must be a tChem eos
+      inertSpecies: [ N2 ] #N2 does not interact with the others and should be set to inert
+      minimumMassFraction: 1E-10 # limit the smallest mass fraction value
+  boundaryConditions: []
+  monitors:
+    # the IgnitionDelayTemperature monitor computes and store the amount of time it took to reach the specified temperature
+    - !ablate::monitors::IgnitionDelayTemperature
+      eos: *eos
+      location: [0.5]
+      thresholdTemperature: 1500
+      log: !ablate::monitors::logs::FileLog
+        name: ignitionDelayTemperature.txt
+```

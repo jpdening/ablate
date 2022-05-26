@@ -1,0 +1,132 @@
+---
+layout: default
+title: Water gravity
+parent: Examples Input Files
+grand_parent: Running Simulations
+nav_exclude: true
+---
+
+[volumeOfFluids/waterGravity.yaml](https://github.com/UBCHREST/ablate/tree/main/tests/integrationTests/inputs/volumeOfFluids/waterGravity.yaml)
+```yaml
+---
+environment:
+  title: WaterWG_50
+  tagDirectory: true
+arguments: { }
+timestepper:
+  name: theMainTimeStepper
+  arguments:
+    ts_type: rk
+    ts_max_time: 1.0
+    ts_max_steps: 10
+    ts_dt: 1e-10
+  domain: !<!ablate::domain::BoxMeshBoundaryCells>
+    name: simpleBoxField
+    faces: [ 50 ]
+    lower: [ 0 ]
+    upper: [ 1 ]
+    preModifiers:
+      - !<!ablate::domain::modifiers::SetFromOptions>
+        dm_refine: 0
+      - !<!ablate::domain::modifiers::DistributeWithGhostCells>
+    postModifiers:
+      - !<!ablate::domain::modifiers::GhostBoundaryCells>
+    fields:
+      - !<!ablate::finiteVolume::CompressibleFlowFields>
+        eos: !<!ablate::eos::PerfectGas>
+          parameters:
+            gamma: 0
+            Rgas: 0
+        region:
+          name: domain
+      - name: densityVF
+        type: FVM
+        region:
+          name: domain
+      - name: volumeFraction
+        location: AUX
+        type: FVM
+        region:
+          name: domain
+      - name: pressure
+        location: AUX
+        type: FVM
+        region:
+          name: domain
+  initialization:
+    - &2
+      fieldName: "euler" # T=300K, v=0m/s, p=100,000Pa
+      field: >-
+        994.0897497618486,
+        2414070815.450644,
+        0.0
+    - &3
+      fieldName: densityVF
+      field: "0.0"
+solvers:
+  - !<!ablate::finiteVolume::FiniteVolumeSolver>
+    id: flow solvers
+    region:
+      name: interiorCells
+    processes:
+      - !<!ablate::finiteVolume::processes::TwoPhaseEulerAdvection>
+        eosGas: !<!ablate::eos::PerfectGas> &4
+          parameters: # air
+            gamma: 1.4
+            Rgas: 287.0
+        eosLiquid: !<!ablate::eos::StiffenedGas> &1
+          parameters: # water
+            gamma: 1.932
+            Cp: 8095.08
+            p0: 1164500000.0
+        fluxCalculatorGasGas: !<!ablate::finiteVolume::fluxCalculator::RiemannStiff>
+          eosL: *4
+          eosR: *4
+        fluxCalculatorGasLiquid: !<!ablate::finiteVolume::fluxCalculator::RiemannStiff>
+          eosL: *4
+          eosR: *1
+        fluxCalculatorLiquidGas: !ablate::finiteVolume::fluxCalculator::RiemannStiff
+          eosL: *1
+          eosR: *4
+        fluxCalculatorLiquidLiquid: !<!ablate::finiteVolume::fluxCalculator::RiemannStiff>
+          eosL: *1
+          eosR: *1
+      - !ablate::finiteVolume::processes::Gravity
+        vector: [ -9.81 ]
+    computePhysicsTimeStep: true
+    monitors:
+      - !<!ablate::monitors::TimeStepMonitor>
+        log: !ablate::monitors::logs::CsvLog
+          name: time.csv
+      - !ablate::monitors::CurveMonitor
+        interval: 1000
+  - !ablate::boundarySolver::BoundarySolver
+    id: openBoundary
+    region:
+      name: boundaryCellsRight
+    fieldBoundary:
+      name: boundaryFaces
+    processes:
+      - !ablate::boundarySolver::lodi::OpenBoundary
+        eos: *1
+        reflectFactor: 0.0
+        referencePressure: 100000
+        maxAcousticsLength: 1
+  - !ablate::boundarySolver::BoundarySolver
+    id: isothermalWall
+    region:
+      name: boundaryCellsLeft
+    fieldBoundary:
+      name: boundaryFaces
+    processes:
+      - !ablate::boundarySolver::lodi::IsothermalWall
+        eos: *1
+
+
+
+
+
+
+
+
+```
