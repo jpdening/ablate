@@ -199,6 +199,11 @@ class BoundarySolver : public solver::CellSolver, public solver::RHSFunction {
      * Return a reference to the boundary geometry.  This is a slow call and should only be done for init/debugging/testing
      */
     std::vector<GradientStencil> GetBoundaryGeometry(PetscInt cell) const;
+
+    /**
+     * Return a reference to the field boundary region
+     */
+    const std::shared_ptr<domain::Region> GetFieldBoundary() {return fieldBoundary;}
 };
 
 }  // namespace ablate::boundarySolver
