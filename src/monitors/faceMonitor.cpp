@@ -13,11 +13,6 @@ PetscErrorCode ablate::monitors::FaceMonitor::MonitorFace(TS ts, PetscInt step, 
 
     if(monitor->interval->Check(PetscObjectComm((PetscObject)ts), step, crtime)) {
 
-        //Just output the region name of the boundary solver
-        std::string regionName = monitor->GetSolver()->GetRegion()->GetName();
-        std::cout << regionName << std::endl;
-
-
 
     }
     PetscFunctionReturn(0);
