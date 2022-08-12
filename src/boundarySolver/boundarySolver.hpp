@@ -63,6 +63,11 @@ class BoundarySolver : public solver::CellSolver, public solver::RHSFunction {
 
    private:
     /**
+     * Vector reference to faceMonitor vector, if attached
+     */
+     std::shared_ptr<Vec> faceVec;
+
+    /**
      * struct to hold the gradient stencil for the boundary
      */
     struct GradientStencil {
@@ -204,6 +209,11 @@ class BoundarySolver : public solver::CellSolver, public solver::RHSFunction {
      * Return a reference to the field boundary region
      */
     const std::shared_ptr<domain::Region> GetFieldBoundary() {return fieldBoundary;}
+
+    /**
+     * Set a shared pointer referencing the face monitor's faceVec
+     */
+     void SetFaceVecRef(std::shared_ptr<Vec> inFaceVec) {faceVec = inFaceVec;}
 };
 
 }  // namespace ablate::boundarySolver

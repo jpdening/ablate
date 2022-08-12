@@ -72,6 +72,9 @@ void ablate::monitors::FaceMonitor::Register(std::shared_ptr<ablate::solver::Sol
     DMCreateGlobalVector(faceDM, &faceVec);
     PetscObjectSetName((PetscObject)faceVec, "faceVec");
     VecSet(faceVec, 1.0);
+
+    //Register the faceVec with the boundary solver
+    bSolver->SetFaceVecRef(std::make_shared<Vec>(faceVec));
 }
 
 void ablate::monitors::FaceMonitor::Save(PetscViewer viewer, PetscInt sequenceNumber, PetscReal time) {
